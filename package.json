@@ -1,0 +1,15 @@
+{
+  "name": "minisig",
+  "author": "wolflo",
+  "license": "MIT",
+  "version": "0.1.0",
+  "description": "Minimal evm multisig",
+  "main": "index.js",
+  "scripts": {
+    "compile": "node src/compile.js"
+  },
+  "devDependencies": {},
+  "dependencies": {
+    "bn.js": "^5.1.2"
+  }
+}

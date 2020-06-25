@@ -1,0 +1,4 @@
+[submodule "huff"]
+	path = huff
+	url = https://github.com/wolflo/huff.git
+	branch = develop
