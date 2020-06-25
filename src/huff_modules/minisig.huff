@@ -1,6 +1,78 @@
-// stack: [ bottom top ]
+// stack: [ top bottom ]
 
-#define macro MAIN = takes(0) returns(0) {
-  calldatasize
+// --- Constants ---
 
+// TODO: check these
+// [] -> [ func_sig ]
+#define macro EXECUTE_FUNC_SIG = takes(0) returns(1) { 0x99b242e5 }
+#define macro SIGNERS_FUNC_SIG = takes(0) returns(1) { 0x46f0975a }
+#define macro THRESHOLD_FUNC_SIG = takes(0) returns(1) { 0x42cde4e8 }
+#define macro DOMAIN_SEPARATOR_FUNC_SIG = takes(0) returns(1) { 0x3644e515 }
+
+// --- Control Flow ---
+
+// [ 0x00 ] ->
+template <pure_funcs_dst>
+#define macro DISPATCH = takes(1) returns(0) {
+  calldataload 0x60 shr dup1  // [ calldata[:4] calldata[:4] ]
+  EXECUTE_FUNC_SIG() eq iszero  // [ calldata[:4] (calldata[:4]!=execute_sig) ]
+  <pure_funcs_dst> jumpi
+  pop // []
 }
+
+// [ calldata[:4] ] -> return
+template <throw_dst>
+#define macro DISPATCH_PURE_FUNCS = takes(1) returns(0) {
+  calldatasize 0x04 gt <throw_dst> jumpi // revert if calldatasize > 4
+  // todo:
+}
+
+// --- Utils ---
+
+// [ mem_ost ] -> [ mem_ost ]
+template <data_ost>
+#define macro COPY_DATA = takes(2) returns(1) {
+  <data_ost> dup1 0x01 codesize sub sub // [ (codesize - data_ost - 1) data_ost mem_ost ]
+  swap1 dup3
+
+  // TODO: note that the -1 here is to account for the 'pass' jumpdest
+  // codecopy(dstOst, ost, len)
+  // [ mem_ost data_ost (codesize - data_ost - 1) mem_ost ]
+  codecopy  // [ mem_ost ]
+}
+
+template <throw_dst>
+#define macro EXECUTE = takes(0) returns(0) {}
+
+
+// --- Huff BS ---
+
+// TODO: check at compile time that len(MAIN__SHALLOW) == len(MAIN)
+#define macro MAIN__SHALLOW = takes(0) returns(0) {
+}
+
+#define macro MAIN__SIZE = takes(0) returns(1) {
+  __codesize(MAIN__SHALLOW)
+}
+
+// --- Main ---
+
+// instead of regular dispatcher, we should run execute by default,
+// and if calldata[:4] != execute, jump past it to a 'return_stuff' macro
+// [] -> []
+#define macro MAIN = takes(0) returns(0) {
+  0x00 dup1
+  DISPATCH<pure_funcs_dst>()
+  EXECUTE<throw_dst>()
+
+  pure_funcs_dst:
+    DISPATCH_PURE_FUNCS<throw_dst>()
+
+  throw_dst:
+    0x00 dup1 revert
+
+  invalid
+  // signers array
+  // jumpdest 'pass' -- offset = codesize - 1
+}
+
