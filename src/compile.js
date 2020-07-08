@@ -7,8 +7,8 @@ const OUT_PATH = '../out/';
 
 const minisigParsed = parser.parseFile('minisig.huff', modulesPath);
 
-const minisig = parser.processMacro(
-  'MAIN',
+const runtime = parser.processMacro(
+  'RUNTIME',
   0,
   [],
   minisigParsed.macros,
@@ -16,7 +16,17 @@ const minisig = parser.processMacro(
   minisigParsed.jumptables
 ).data.bytecode;
 
-writeBin('minisig.bin', minisig);
+const runtimeShallow = parser.processMacro(
+  'RUNTIME__SHALLOW',
+  0,
+  [],
+  minisigParsed.macros,
+  minisigParsed.jumptables,
+).data.bytecode;
+
+if(runtime.length !== runtimeShallow.length) throw "runtimeShallow incorrect length";
+
+writeBin('minisig-runtime.bin', runtime);
 
 console.log(`bytecode written to ${OUT_PATH}`);
 
