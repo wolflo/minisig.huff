@@ -21,14 +21,6 @@
 // keccak256("Execute(uint8 callType,address target,uint256 value,uint256 expiryBlock,bytes data)");
 #define macro PUSH_EXEC_TYPEHASH = takes(0) returns(1) { 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff }
 
-// --- Huff BS ---
-
-#define macro RUNTIME__SHALLOW = takes(0) returns(0) { }
-
-#define macro RUNTIME__SIZE = takes(0) returns(1) {
-  __codesize(RUNTIME__SHALLOW)
-}
-
 // --- Utils ---
 
 // [ mem_ost ] -> []
@@ -57,24 +49,27 @@ template <data_ost>
 
 // TODO: note that threshold is encoded as single byte
 // [ 00 ] -> return
+template <rt_len>
 #define macro RET_THRESHOLD = takes(1) returns(0) {
-  0x01 dup1 dup3 COPY_DATA_BY_LEN<RUNTIME__SIZE>()  // [ 01 00 ]
+  0x01 dup1 dup3 COPY_DATA_BY_LEN<rt_len>()  // [ 01 00 ]
   swap1 return
 }
 
 // [ 00 ] -> return
+template <rt_len>
 #define macro RET_DOMSEP = takes(1) returns(0) {
-  0x20 dup1 dup3 COPY_DATA_BY_LEN<RUNTIME__SIZE+1>()  // [ 0x20 00 ]
+  0x20 dup1 dup3 COPY_DATA_BY_LEN<rt_len+1>()  // [ 0x20 00 ]
   swap1 return
 }
 
 // note that addresses are encoded in 32 bytes, right-aligned
 // [ 00 ] -> return
+template <rt_len>
 #define macro RET_ALLSIGNERS = takes(1) returns(0) {
   // mstore(0x00, 0x20) -- store ost to first element of signers array
   0x20 dup1 dup3 mstore  // [ 0x20 00 ]
   // copy signers array len + elements to 0x20 in memory
-  dup1 COPY_DATA_TO_END<RUNTIME__SIZE+33>() // [ 0x20 00 ]
+  dup1 COPY_DATA_TO_END<rt_len+33>() // [ 0x20 00 ]
   dup1 mload // [ len(signers) 0x20 00 ]
   mul 0x40 add swap1 // [ 00 (64 + (32 * len(signers))) ]
   // return(ost, len)
@@ -84,7 +79,7 @@ template <data_ost>
 // --- Execute ---
 
 // [ 00 ] -> return
-template <throw_dst, stop_dst>
+template <throw_dst, stop_dst, rt_len>
 #define macro EXEC = takes(0) returns(0) {
   // mem
     //                  00  {1 byte threshold}{31 of bytes domain_sep}
@@ -100,7 +95,7 @@ template <throw_dst, stop_dst>
   // todo: check size of calldata
 
   // copy all appended data into mem
-  dup1 COPY_DATA_TO_END<RUNTIME__SIZE>() // [ 00 ]
+  dup1 COPY_DATA_TO_END<rt_len>() // [ 00 ]
   dup1 mload  0xf8 shr // [ threshold 00 ]
   0x01 mload  // [ dom_sep threshold 00 ]
   0x21 mload  // [ len(signers) dom_sep threshold 00 ]
@@ -123,7 +118,7 @@ template <pure_funcs_dst>
 }
 
 // [ calldata[:4] 00 ] -> return
-template <throw_dst, stop_dst>
+template <throw_dst, stop_dst, rt_len>
 #define macro DISPATCH_PURE_FUNCS = takes(1) returns(0) {
 
   // (payable receive function)
@@ -142,11 +137,11 @@ template <throw_dst, stop_dst>
   <throw_dst> jump  // revert if we have non-empty calldata but no matches
 
   threshold_dst:
-    RET_THRESHOLD()
+    RET_THRESHOLD<rt_len>()
   domain_separator_dst:
-    RET_DOMSEP()
+    RET_DOMSEP<rt_len>()
   all_signers_dst:
-    RET_ALLSIGNERS()
+    RET_ALLSIGNERS<rt_len>()
 }
 
 
@@ -155,13 +150,14 @@ template <throw_dst, stop_dst>
 // instead of regular dispatcher, we should run execute by default,
 // and if calldata[:4] != execute, jump past it to a 'return_stuff' macro
 // [] -> []
+template <rt_len>
 #define macro RUNTIME = takes(0) returns(0) {
   0x00 dup1
   DISPATCH<pure_funcs_dst>()
-  EXEC<throw_dst, stop_dst>()
+  EXEC<throw_dst, stop_dst, rt_len>()
 
   pure_funcs_dst:
-    DISPATCH_PURE_FUNCS<throw_dst, stop_dst>()
+    DISPATCH_PURE_FUNCS<throw_dst, stop_dst, rt_len>()
 
   throw_dst:
     0x00 dup1 revert
