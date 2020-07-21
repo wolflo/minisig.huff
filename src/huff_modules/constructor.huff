@@ -1,0 +1,20 @@
+// constructor args encoding:
+// { 32 bytes threshold }
+// { 32 bytes ost from start of constructor args to signers array data (0x40) }
+// { 32 bytes len(signers) }
+// { 32 bytes first element of signers array -- address, right-aligned }
+
+// - see what solidity does with the ost to array data in this case
+  // - uhh it reverts if it's > 4294967296
+  // - then uses it to find the array data in memory (adds it to the constructor args offset)
+
+// TODO: all constructor arg validation and shifting
+template <cstr_len>
+#define macro CONSTRUCTOR = takes(0) returns(0) {
+  0x00 <cstr_len> dup1 codesize sub // [ rt_len cstr_len 00 ]
+  dup1 swap2 dup4 // [ 00 cstr_len rt_len rt_len 00 ]
+  // codecopy(dstOst, ost, len)
+  codecopy // [ rt_len 00 ]
+  // return(ost, len)
+  swap1 return
+}
