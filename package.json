@@ -6,7 +6,7 @@
   "description": "Minimal evm multisig",
   "main": "index.js",
   "scripts": {
-    "compile": "node src/compile.js"
+    "compile": "node compile.js"
   },
   "devDependencies": {},
   "dependencies": {
