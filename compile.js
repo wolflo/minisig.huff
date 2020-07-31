@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const parser = require('./huff/src/parser');
 
-const modulesPath = path.posix.resolve(__dirname, './src/huff_modules');
+const modulesPath = path.posix.resolve(__dirname, './src');
 const OUT_PATH = 'out/';
 
 const msigParsed = parser.parseFile('minisig.huff', modulesPath);
@@ -63,9 +63,7 @@ function lenBytes(str) {
 }
 
 function trimBytes(str) {
-  if (str.length % 2 !== 0) {
-    throw 'ERR: These aint bytes'
-  }
+  check(str.length % 2 === 0, `ERR: These aint bytes: ${str}`);
   return str.replace(/^0x/,'')
 }
 
