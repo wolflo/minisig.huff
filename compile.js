@@ -20,14 +20,14 @@ const runtimeShallow = parser.processMacro(
 const constructorShallow = parser.processMacro(
   'CONSTRUCTOR',
   0,
-  [ '00' ],
+  [ '00', '00' ],
   constructorParsed.macros,
   constructorParsed.inputMap,
   constructorParsed.jumptables
 ).data.bytecode;
 
-check(lenBytes(runtimeShallow) <= 255, "bad runtime length estimate");
-check(lenBytes(constructorShallow) <= 255, "bad constructor length estimate");
+check(lenBytes(runtimeShallow) <= 255, 'bad runtime length estimate');
+check(lenBytes(constructorShallow) <= 255, 'bad constructor length estimate');
 
 const runtime = parser.processMacro(
   'RUNTIME',
@@ -41,22 +41,26 @@ const runtime = parser.processMacro(
 const constructor = parser.processMacro(
   'CONSTRUCTOR',
   0,
-  [ lenBytes(constructorShallow).toString() ],
+  [ lenBytes(constructorShallow).toString(), lenBytes(runtime).toString() ],
   constructorParsed.macros,
   constructorParsed.inputMap,
   constructorParsed.jumptables
 ).data.bytecode;
 
-check(lenBytes(runtime) === lenBytes(runtimeShallow), "bad runtime length");
-check(lenBytes(constructor) === lenBytes(constructorShallow), "bad runtime length");
+check(lenBytes(runtime) === lenBytes(runtimeShallow), 'bad runtime length');
+check(lenBytes(constructor) === lenBytes(constructorShallow), 'bad runtime length');
 
-const initCode = runtime + constructor
+const bytecode = constructor + runtime
 writeBin('minisig-runtime.bin', runtime);
-writeBin('minisig-init.bin', initCode);
+writeBin('minisig.bin', bytecode);
 console.log(`bytecode written to ${OUT_PATH}`);
-console.log(`init size        : ${lenBytes(initCode)} bytes`);
+console.log(`deploy size      : ${lenBytes(bytecode)} bytes`);
 console.log(`runtime size     : ${lenBytes(runtime)} bytes`);
 console.log(`constructor size : ${lenBytes(constructor)} bytes`);
+
+const dummmyConstructorArgs = '0000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000020000000000000000000000004120c9445ed6013ba2dc8ec220ea1878778613e70000000000000000000000004120c9445ed6013ba2dc8ec220ea1878778613e7'
+const initCode = bytecode + dummmyConstructorArgs
+writeBin('minisig-init.bin', initCode);
 
 function lenBytes(str) {
   return trimBytes(str).length / 2
