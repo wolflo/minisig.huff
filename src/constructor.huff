@@ -1,3 +1,4 @@
+// [ top bottom ]
 // constructor args encoding:
 // { 32 bytes threshold }
 // { 32 bytes ost from start of constructor args to signers array data (0x40) }
@@ -8,13 +9,57 @@
   // - uhh it reverts if it's > 4294967296
   // - then uses it to find the array data in memory (adds it to the constructor args offset)
 
-// TODO: all constructor arg validation and shifting
-template <cstr_len>
+// [ signers_array_data_ost ]
+#define macro VALIDATE_SIGNERS_DATA_OST = takes(1) returns(0) {
+  pop
+}
+
+#define macro VALIDATE_THRESHOLD = takes(1) returns(0) {
+  pop
+}
+
+// codecopy ct_len + rt_len + 0x20 (ost to signers array) to 0x0
+// mload and validate signers_ost (< 4294967296 ?)
+// codecopy runtime ++ threshold at 0x0
+// codecopy (start of constructor args + signers_ost -> codesize) to mem at rt size + 0x20
+// mload threshold
+// validate threshold
+// validate signers array with memloads
+
+template <ct_len, rt_len>
 #define macro CONSTRUCTOR = takes(0) returns(0) {
-  0x00 <cstr_len> dup1 codesize sub // [ rt_len cstr_len 00 ]
-  dup1 swap2 dup4 // [ 00 cstr_len rt_len rt_len 00 ]
   // codecopy(dstOst, ost, len)
-  codecopy // [ rt_len 00 ]
-  // return(ost, len)
-  swap1 return
+
+  // codecopy(0, signers_code_ost, 32)
+  0x20 dup1 <ct_len> <rt_len> add add 0x00  //[ 0, signers_code_ost, 32 ]
+  codecopy    //[]
+  0x00 mload  //[ arr_data_ost ]
+  dup1 VALIDATE_SIGNERS_DATA_OST()
+
+  //[ arr_data_ost ]
+  // codecopy(0, ct_len, rt_len + 32)
+  <rt_len> 0x20 add <ct_len> 0x00 //[ 0, ct_len, rt_len+32, arr_data_ost ]
+  codecopy
+
+  //[ arr_data_ost ]
+  // codecopy(rt_len+32, ct_rt_len+arr_data_ost+32, codesize-ct_rt_len+arr_data_ost)
+  <ct_len> <rt_len> add add dup1 codesize sub dup1 swap2 <rt_len> 0x20 add
+  //[ rt_len+32, ct_rt_len+arr_data_ost, codesize-ct_rt_len+arr_data_ost '' ]
+  codecopy
+
+  // check that the length we used for copying signers is correct
+  <rt_len> 0x20 add mload //[ signers_len inferred_len ]
+  dup1 0x20 mul 0x20 add swap1 swap2 eq iszero throw_dst jumpi  //[ signers_len ]
+
+  // check signers.length >= threshold
+  <rt_len> mload gt throw_dst jumpi //[ ]
+
+  // TODO: validate signers array
+
+  // return(0, rt_len+64+32*signers_len)
+  <rt_len> 0x20 add mload //[ signers_len ]
+  0x20 mul <rt_len> 0x40 add add 0x00 return
+
+  throw_dst:
+  0x00 dup1 revert
 }
