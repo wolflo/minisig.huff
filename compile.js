@@ -11,7 +11,7 @@ const constructorParsed = parser.parseFile('constructor.huff', modulesPath)
 const runtimeShallow = parser.processMacro(
   'RUNTIME',
   0,
-  [ '00' ],
+  [ '0xaa' ],
   msigParsed.macros,
   msigParsed.inputMap,
   msigParsed.jumptables
@@ -20,14 +20,18 @@ const runtimeShallow = parser.processMacro(
 const constructorShallow = parser.processMacro(
   'CONSTRUCTOR',
   0,
-  [ '00', '00' ],
+  [ '0xaaaa', '0xaa' ],
   constructorParsed.macros,
   constructorParsed.inputMap,
   constructorParsed.jumptables
 ).data.bytecode;
 
 check(lenBytes(runtimeShallow) <= 255, 'bad runtime length estimate');
-check(lenBytes(constructorShallow) <= 255, 'bad constructor length estimate');
+check(
+  lenBytes(constructorShallow) > 255 &&
+  lenBytes(constructorShallow) <= 65525,
+  'bad constructor length estimate'
+);
 
 const runtime = parser.processMacro(
   'RUNTIME',
@@ -48,7 +52,7 @@ const constructor = parser.processMacro(
 ).data.bytecode;
 
 check(lenBytes(runtime) === lenBytes(runtimeShallow), 'bad runtime length');
-check(lenBytes(constructor) === lenBytes(constructorShallow), 'bad runtime length');
+check(lenBytes(constructor) === lenBytes(constructorShallow), 'bad constructor length');
 
 const bytecode = constructor + runtime
 writeBin('minisig-runtime.bin', runtime);
@@ -60,6 +64,7 @@ console.log(`constructor size : ${lenBytes(constructor)} bytes`);
 
 const dummmyConstructorArgs = '000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000003000000000000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa000000000000000000000000bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb000000000000000000000000ffffffffffffffffffffffffffffffffffffffff'
 const initCode = bytecode + dummmyConstructorArgs
+writeBin('minisig-cstr.bin', constructor);
 writeBin('minisig-init.bin', initCode);
 
 function lenBytes(str) {

@@ -24,6 +24,18 @@ template <throw_dst>
   dup1 iszero swap1 0xff swap1 gt or <throw_dst> jumpi
 }
 
+/// EIP-712 Typehashes
+// keccak256("EIP712Domain(uint256 chainId,uint256 deployBlock,address verifyingContract)");
+#define macro PUSH_DOMSEP_TYPEHASH = takes(0) returns(1) { 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff }
+
+#define macro DOMSEP = takes(0) returns(1) {
+  PUSH_DOMSEP_TYPEHASH() 0x00 mstore
+  chainid 0x20 mstore
+  number 0x40 mstore
+  address 0x60 mstore
+  0x80 0x00 sha3
+}
+
 // codecopy ct_len + rt_len + 0x20 (ost to signers array) to 0x0
 // mload and validate signers_ost (< 4294967296 ?)
 // codecopy runtime ++ threshold at 0x0
@@ -32,6 +44,7 @@ template <throw_dst>
 // validate threshold
 // validate signers array with memloads
 
+// TODO: see solidity strict mode encoding
 template <ct_len, rt_len>
 #define macro CONSTRUCTOR = takes(0) returns(0) {
   // codecopy(dstOst, ost, len)
@@ -42,19 +55,25 @@ template <ct_len, rt_len>
   0x00 mload  //[ arr_data_ost ]
   dup1 VALIDATE_SIGNERS_DATA_OST<throw_dst>()
 
-  //[ arr_data_ost ]
+  // get domain separator -- done here so we can overwrite mem used for sha3
+  DOMSEP() //[ domsep arr_data_ost ]
+
+  //[ domsep arr_data_ost ]
   // codecopy(0, ct_len, rt_len + 32)
-  <rt_len> 0x20 add <ct_len> 0x00 //[ 0, ct_len, rt_len+32, arr_data_ost ]
-  codecopy
+  <rt_len> 0x20 add <ct_len> 0x00 //[ 0, ct_len, rt_len+32, domsep, arr_data_ost ]
+  codecopy //[ domsep arr_data_ost ]
+
+  // mstore domsep after threshold
+  <rt_len> 0x20 add mstore //[ arr_data_ost ]
 
   //[ arr_data_ost ]
-  // codecopy(rt_len+32, ct_rt_len+arr_data_ost+32, codesize-ct_rt_len+arr_data_ost)
-  <ct_len> <rt_len> add add dup1 codesize sub dup1 swap2 <rt_len> 0x20 add
+  // codecopy(rt_len+64, ct_rt_len+arr_data_ost+32, codesize-ct_rt_len+arr_data_ost)
+  <ct_len> <rt_len> add add dup1 codesize sub dup1 swap2 <rt_len> 0x40 add
   //[ rt_len+32, ct_rt_len+arr_data_ost, codesize-ct_rt_len+arr_data_ost '' ]
   codecopy
 
   // check that the length we used for copying signers is correct
-  <rt_len> 0x20 add mload //[ signers_len inferred_len ]
+  <rt_len> 0x40 add mload //[ signers_len inferred_len ]
   dup1 0x20 mul 0x20 add swap1 swap2 eq iszero throw_dst jumpi  //[ signers_len ]
   // sanity check on size of signers
   // TODO: unclear why solidity uses this specific value
@@ -68,16 +87,16 @@ template <ct_len, rt_len>
 
   /// Validate signers array
 
-  // prev_signer = 0
+  // prev_signer := 0
   // ptr := rt_len+32
   // for(i := 0; i < signers_len; i++):
     // signer := mload(ptr)
     // if !(signer > prev_signer):
     //   revert
     // ptr += 32
-  <rt_len> 0x20 add mload 0x20 mul //[ signers_len*32 ]
-  <rt_len> 0x40 add //[ signers_ptr signers_len*32 ]
-  0x00 dup1 //[ 00 signers[0] signers_ptr signers_len*32 ]
+  <rt_len> 0x40 add mload 0x20 mul //[ signers_len*32 ]
+  <rt_len> 0x60 add //[ signers_ptr signers_len*32 ]
+  0x00 dup1 //[ 00 00 signers_ptr signers_len*32 ]
 
   //[ ost prev_signer arr_ptr arr_len*32 ]
   check_next_signer:
@@ -91,9 +110,9 @@ template <ct_len, rt_len>
     check_next_signer jump
   endfor:
 
-  // return(0, rt_len+64+32*signers_len)
-  <rt_len> 0x20 add mload //[ signers_len ]
-  0x20 mul <rt_len> 0x40 add add 0x00 return
+  // return(0, rt_len+96+32*signers_len)
+  <rt_len> 0x40 add mload //[ signers_len ]
+  0x20 mul <rt_len> 0x60 add add 0x00 return
 
   throw_dst:
     0x00 dup1 revert
