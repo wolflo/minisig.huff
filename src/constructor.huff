@@ -1,3 +1,5 @@
+#include "./common.huff"
+
 // [ top bottom ]
 // constructor args encoding:
 // { 32 bytes threshold }
@@ -9,13 +11,17 @@
   // - uhh it reverts if it's > 4294967296
   // - then uses it to find the array data in memory (adds it to the constructor args offset)
 
-// [ signers_array_data_ost ]
+//[ signers_array_data_ost ]
+template <throw_dst>
 #define macro VALIDATE_SIGNERS_DATA_OST = takes(1) returns(0) {
-  pop
+  // TODO: unclear why solidity uses this specific value
+  0x100000000 swap1 gt <throw_dst> jumpi
 }
 
+//[ threshold ]
+template <throw_dst>
 #define macro VALIDATE_THRESHOLD = takes(1) returns(0) {
-  pop
+  dup1 iszero swap1 0xff swap1 gt or <throw_dst> jumpi
 }
 
 // codecopy ct_len + rt_len + 0x20 (ost to signers array) to 0x0
@@ -34,7 +40,7 @@ template <ct_len, rt_len>
   0x20 dup1 <ct_len> <rt_len> add add 0x00  //[ 0, signers_code_ost, 32 ]
   codecopy    //[]
   0x00 mload  //[ arr_data_ost ]
-  dup1 VALIDATE_SIGNERS_DATA_OST()
+  dup1 VALIDATE_SIGNERS_DATA_OST<throw_dst>()
 
   //[ arr_data_ost ]
   // codecopy(0, ct_len, rt_len + 32)
@@ -50,16 +56,45 @@ template <ct_len, rt_len>
   // check that the length we used for copying signers is correct
   <rt_len> 0x20 add mload //[ signers_len inferred_len ]
   dup1 0x20 mul 0x20 add swap1 swap2 eq iszero throw_dst jumpi  //[ signers_len ]
+  // sanity check on size of signers
+  // TODO: unclear why solidity uses this specific value
+  0x100000000 dup2 gt throw_dst jumpi // [signers_len]
 
-  // check signers.length >= threshold
-  <rt_len> mload gt throw_dst jumpi //[ ]
+  // check threshold
+  <rt_len> mload dup1 VALIDATE_THRESHOLD<throw_dst>() //[ thresh signers_len ]
 
-  // TODO: validate signers array
+  // check signers.length >= threshold (~ threshold > len)
+  gt throw_dst jumpi //[ ]
+
+  /// Validate signers array
+
+  // prev_signer = 0
+  // ptr := rt_len+32
+  // for(i := 0; i < signers_len; i++):
+    // signer := mload(ptr)
+    // if !(signer > prev_signer):
+    //   revert
+    // ptr += 32
+  <rt_len> 0x20 add mload 0x20 mul //[ signers_len*32 ]
+  <rt_len> 0x40 add //[ signers_ptr signers_len*32 ]
+  0x00 dup1 //[ 00 signers[0] signers_ptr signers_len*32 ]
+
+  //[ ost prev_signer arr_ptr arr_len*32 ]
+  check_next_signer:
+    // check entry condition
+    dup4 dup2 lt iszero endfor jumpi //[ ost prev_signer arr_ptr arr_len*32 ]
+    dup1 0x20 add swap1 //[ ost ost+32 prev_signer arr_ptr arr_len*32 ]
+    dup4 add //[ ost+arr_ptr ost+32 prev_signer arr_ptr arr_len*32 ]
+    mload MASK_ADDR() //[ signer ost+32 prev_signer arr_ptr arr_len*32 ]
+    swap2 dup3 //[ signer prev_signer ost+32 signer arr_ptr arr_len*32 ]
+    gt iszero throw_dst jumpi //[ ost+32 signer arr_ptr arr_len*32 ]
+    check_next_signer jump
+  endfor:
 
   // return(0, rt_len+64+32*signers_len)
   <rt_len> 0x20 add mload //[ signers_len ]
   0x20 mul <rt_len> 0x40 add add 0x00 return
 
   throw_dst:
-  0x00 dup1 revert
+    0x00 dup1 revert
 }

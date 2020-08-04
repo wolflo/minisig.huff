@@ -1,0 +1,7 @@
+/// Masks
+#define macro PUSH20_MASK = takes(0) returns(1) { 0xffffffffffffffffffffffffffffffffffffffff }
+
+// [ word ] -> [ address ]
+#define macro MASK_ADDR = takes(1) returns(1) {
+  PUSH20_MASK() and
+}
