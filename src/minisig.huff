@@ -1,9 +1,8 @@
 // stack: [ top bottom ]
 
-// TODO: got some stack representations mixed up
-
-// {runtime_code} {1 byte threshold} {32 bytes domain_separator} {address[] signers}
-// signers array is non-standard encoding, without offset to data (assumed 32 bytes)
+// runtime encoding:
+// {runtime_code} {32 byte threshold} {32 byte domain_separator} {address[] signers}
+// signers array is non-standard encoding, without offset to data
 // that is:
 // 0-32: len(signers)
 // 32-64: first element of signers array, right-aligned
@@ -11,13 +10,13 @@
 // --- Constants ---
 // [] -> [ constant ]
 
-#define macro PUSH_EXEC_FUNC_SIG = takes(0) returns(1) { 0xb0fddf53 }  // TODO: update
-#define macro PUSH_ALLSIGNERS_FUNC_SIG = takes(0) returns(1) { 0x43761ca7 }
+/// Function signatures
+#define macro PUSH_EXEC_FUNC_SIG = takes(0) returns(1) { 0xb0fddf53 }
+#define macro PUSH_SIGNERS_FUNC_SIG = takes(0) returns(1) { 0x43761ca7 }
 #define macro PUSH_THRESHOLD_FUNC_SIG = takes(0) returns(1) { 0x42cde4e8 }
 #define macro PUSH_DOMSEP_FUNC_SIG = takes(0) returns(1) { 0x3644e515 }
 
-// keccak256("EIP712Domain(uint256 chainId,uint256 deployBlock,address verifyingContract)");
-#define macro PUSH_DOMSEP_TYPEHASH = takes(0) returns(1) { 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff }
+/// EIP-712
 // keccak256("Execute(uint8 callType,address target,uint256 value,uint256 expiryBlock,bytes data)");
 #define macro PUSH_EXEC_TYPEHASH = takes(0) returns(1) { 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff }
 
@@ -27,7 +26,6 @@
 template <data_ost>
 #define macro CODECOPY_TO_END = takes(1) returns(0) {
   <data_ost> dup1 codesize sub swap2 // [ mem_ost (codesize - data_ost) data_ost ]
-
   // codecopy(dstOst, ost, len)
   // [ mem_ost data_ost (codesize - data_ost) ]
   codecopy  // []
@@ -43,9 +41,7 @@ template <data_ost>
   codecopy  // []
 }
 
-
 // --- Pure Functions ---
-// TODO: codecopy everything, or encode `jumpdest push val swap1 jump` in every immutable?
 
 // TODO: note that threshold is encoded as single byte
 // [ 00 ] -> return
@@ -65,7 +61,7 @@ template <rt_len>
 // note that addresses are encoded in 32 bytes, right-aligned
 // [ 00 ] -> return
 template <rt_len>
-#define macro RET_ALLSIGNERS = takes(1) returns(0) {
+#define macro RET_SIGNERS = takes(1) returns(0) {
   // mstore(0x00, 0x20) -- store ost to first element of signers array
   0x20 dup1 dup3 mstore  // [ 0x20 00 ]
   // copy signers array len + elements to 0x20 in memory
@@ -82,32 +78,30 @@ template <rt_len>
 template <throw_dst, stop_dst, rt_len>
 #define macro EXEC = takes(0) returns(0) {
   // mem
-    //                  00  {1 byte threshold}{31 of bytes domain_sep}
-    //                  20  {last byte of domain_sep}{len(signers)}
-    // 41-(64+len(signers)) elements of signers
-    // calldata
+    //                  00  {32 byte threshold}
+    //                  20  {32 byte domain_sep}
+    //                  40  {32 byte len(signers)}
+    // 60 : 60+32*(arr_len) elements of signers array
   // calldata
-    // {4 bytes sig}{32 bytes callType}{32 bytes target}
-    // {32 bytes value}{32 bytes expiryBlock}
+    // {4 byte sig}
+    // {32 byte callType}{32 byte txGas}{32 byte value}{32 byte target}
     // {data}{sigs}
-
 
   // todo: check size of calldata
 
   // copy all appended data into mem
-  dup1 CODECOPY_TO_END<rt_len>() // [ 00 ]
-  dup1 mload  0xf8 shr // [ threshold 00 ]
-  0x01 mload  // [ dom_sep threshold 00 ]
-  0x21 mload  // [ len(signers) dom_sep threshold 00 ]
-  0x04 calldataload // [ call_type len(signers) dom_sep threshold 00 ]
-  0x24 calldataload // [ target call_type len(signers) dom_sep threshold 00 ]
-  0x44 calldataload // [ val target call_type len(signers) dom_sep threshold 00 ]
-  0x64 calldataload // [ expiryBlock val target call_type len(signers) dom_sep threshold 00 ]
+  // dup1 CODECOPY_TO_END<rt_len>() // [ 00 ]
+  // dup1 mload  0xf8 shr // [ threshold 00 ]
+  // 0x01 mload  // [ dom_sep threshold 00 ]
+  // 0x21 mload  // [ len(signers) dom_sep threshold 00 ]
+  // 0x04 calldataload // [ call_type len(signers) dom_sep threshold 00 ]
+  // 0x24 calldataload // [ target call_type len(signers) dom_sep threshold 00 ]
+  // 0x44 calldataload // [ val target call_type len(signers) dom_sep threshold 00 ]
+  // 0x64 calldataload // [ expiryBlock val target call_type len(signers) dom_sep threshold 00 ]
 }
 
 // --- Control Flow ---
 
-// todo: confirm calldataload with no calldata just puts a 0 on the stack
 // [ 00 ] -> []
 template <pure_funcs_dst>
 #define macro DISPATCH = takes(1) returns(0) {
@@ -132,23 +126,23 @@ template <throw_dst, stop_dst, rt_len>
   swap1 dup2 // [ calldata[:4] 00 calldata[:4] ]
   // todo:
   PUSH_THRESHOLD_FUNC_SIG() eq threshold_dst jumpi // [ 00 calldata[:4] ]
-  dup2 PUSH_DOMSEP_FUNC_SIG() eq domain_separator_dst jumpi // [ 00 calldata[:4] ]
-  swap1 PUSH_ALLSIGNERS_FUNC_SIG() eq all_signers_dst jumpi // [ 00 ]
-  <throw_dst> jump  // revert if we have non-empty calldata but no matches
+  dup2 PUSH_DOMSEP_FUNC_SIG() eq dom_sep_dst jumpi // [ 00 calldata[:4] ]
+  swap1 PUSH_SIGNERS_FUNC_SIG() eq signers_dst jumpi // [ 00 ]
+  <throw_dst> jump  // revert if we have non-empty calldata but no matches todo: replace with in-place revert?
 
   threshold_dst:
     RET_THRESHOLD<rt_len>()
-  domain_separator_dst:
+  dom_sep_dst:
     RET_DOMSEP<rt_len>()
-  all_signers_dst:
-    RET_ALLSIGNERS<rt_len>()
+  signers_dst:
+    RET_SIGNERS<rt_len>()
 }
 
 
 // --- Main ---
 
-// instead of regular dispatcher, we should run execute by default,
-// and if calldata[:4] != execute, jump past it to a 'return_stuff' macro
+// instead of regular dispatcher, we run execute by default, and if
+// calldata[:4] != execute, jump past it to view functions
 // [] -> []
 template <rt_len>
 #define macro RUNTIME = takes(0) returns(0) {
@@ -165,7 +159,6 @@ template <rt_len>
   stop_dst:
     stop
 
-  invalid
   // constructor data
 }
 

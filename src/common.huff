@@ -1,4 +1,4 @@
-/// Masks
+// [ ] -> [ mask ]
 #define macro PUSH20_MASK = takes(0) returns(1) { 0xffffffffffffffffffffffffffffffffffffffff }
 
 // [ word ] -> [ address ]
