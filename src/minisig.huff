@@ -25,7 +25,7 @@
 
 // [ mem_ost ] -> []
 template <data_ost>
-#define macro COPY_DATA_TO_END = takes(1) returns(0) {
+#define macro CODECOPY_TO_END = takes(1) returns(0) {
   <data_ost> dup1 codesize sub swap2 // [ mem_ost (codesize - data_ost) data_ost ]
 
   // codecopy(dstOst, ost, len)
@@ -35,7 +35,7 @@ template <data_ost>
 
 // [ mem_ost len ] -> []
 template <data_ost>
-#define macro COPY_DATA_BY_LEN = takes(1) returns(0) {
+#define macro CODECOPY_BY_LEN = takes(1) returns(0) {
   <data_ost>  // [ data_ost mem_ost len  ]
   swap1
   // codecopy(dstOst, ost, len)
@@ -51,14 +51,14 @@ template <data_ost>
 // [ 00 ] -> return
 template <rt_len>
 #define macro RET_THRESHOLD = takes(1) returns(0) {
-  0x01 dup1 dup3 COPY_DATA_BY_LEN<rt_len>()  // [ 01 00 ]
+  0x20 dup1 dup3 CODECOPY_BY_LEN<rt_len>()  // [ 32 00 ]
   swap1 return
 }
 
 // [ 00 ] -> return
 template <rt_len>
 #define macro RET_DOMSEP = takes(1) returns(0) {
-  0x20 dup1 dup3 COPY_DATA_BY_LEN<rt_len+1>()  // [ 0x20 00 ]
+  0x20 dup1 dup3 CODECOPY_BY_LEN<rt_len+32>()  // [ 0x20 00 ]
   swap1 return
 }
 
@@ -69,7 +69,7 @@ template <rt_len>
   // mstore(0x00, 0x20) -- store ost to first element of signers array
   0x20 dup1 dup3 mstore  // [ 0x20 00 ]
   // copy signers array len + elements to 0x20 in memory
-  dup1 COPY_DATA_TO_END<rt_len+33>() // [ 0x20 00 ]
+  dup1 CODECOPY_TO_END<rt_len+64>() // [ 0x20 00 ]
   dup1 mload // [ len(signers) 0x20 00 ]
   mul 0x40 add swap1 // [ 00 (64 + (32 * len(signers))) ]
   // return(ost, len)
@@ -95,7 +95,7 @@ template <throw_dst, stop_dst, rt_len>
   // todo: check size of calldata
 
   // copy all appended data into mem
-  dup1 COPY_DATA_TO_END<rt_len>() // [ 00 ]
+  dup1 CODECOPY_TO_END<rt_len>() // [ 00 ]
   dup1 mload  0xf8 shr // [ threshold 00 ]
   0x01 mload  // [ dom_sep threshold 00 ]
   0x21 mload  // [ len(signers) dom_sep threshold 00 ]
