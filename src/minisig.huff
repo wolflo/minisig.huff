@@ -20,14 +20,24 @@
 // keccak256("Execute(uint8 callType,address target,uint256 value,uint256 expiryBlock,bytes data)");
 #define macro PUSH_EXEC_TYPEHASH = takes(0) returns(1) { 0x9c1370cbf5462da152553d1b9556f96a7eb4dfe28fbe07e763227834d409103a }
 
+/// Calldata offsets (includes 4 byte sig)
+#define macro CD_OST_TARG  = takes(0) returns(1) { 0x04 }  // 4
+#define macro CD_OST_CTYPE = takes(0) returns(1) { 0x24 } // 36
+#define macro CD_OST_GAS   = takes(0) returns(1) { 0x44 } // 68
+#define macro CD_OST_VAL   = takes(0) returns(1) { 0x64 } // 100
+#define macro CD_OST_DATA  = takes(0) returns(1) { 0x84 }  // 132
+#define macro CD_OST_SIGS  = takes(0) returns(1) { 0xa4 }  // 164
+
+
 // --- Utils ---
 
 // [ mem_ost ] -> []
 template <data_ost>
 #define macro CODECOPY_TO_END = takes(1) returns(0) {
-  <data_ost> dup1 codesize sub swap2 // [ mem_ost (codesize - data_ost) data_ost ]
+  <data_ost> dup1 //[ code_ost_data code_ost_data mem_ost ]
+  codesize sub swap2
+  //[ mem_ost code_ost_data (codesize-code_ost_data) ]
   // codecopy(dstOst, ost, len)
-  // [ mem_ost data_ost (codesize - data_ost) ]
   codecopy  // []
 }
 
@@ -77,17 +87,186 @@ template <rt_len>
 // [ 00 ] -> return
 template <throw_dst, stop_dst, rt_len>
 #define macro EXEC = takes(0) returns(0) {
-  // mem
-    //                  00  {32 byte threshold}
-    //                  20  {32 byte domain_sep}
-    //                  40  {32 byte len(signers)}
-    // 60 : 60+32*(arr_len) elements of signers array
-  // calldata
-    // {4 byte sig}
-    // {32 byte callType}{32 byte txGas}{32 byte value}{32 byte target}
-    // {data}{sigs}
+  // MEM
+  // 00  {32 byte threshold}
+  // 20  {32 byte domain_sep}
+  // 40  {32 byte len(signers)}
+  // 60 : 60+32*(arr_len) elements of signers array
+  // CALLDATA
+  // {4 byte sig}
+  // {32 byte target}{32 byte callType}{32 byte txGas}{32 byte value}{data}{sigs}
 
-  // todo: check size of calldata
+  // check calldatasize >= 196
+  0xc4 calldatasize lt <throw_dst> jumpi
+
+  // copy appended data to mem
+  0x00 CODECOPY_TO_END<rt_len>()
+
+  // check len(_sigs) >= thresh * 65
+  CD_OST_SIGS() calldataload //[ sigs_ptr ]
+  0x04 add calldataload //[ len(sigs) ]
+  // get required _sigs len
+  0x00 mload //[ thresh len(sigs) ]
+  0x41 mul //[ 65*thresh len(sigs) ]
+  gt <throw_dst> jumpi //[ ]
+
+  // increment and store nonce
+  0x00 sload dup1 0x01 add 0x00 sstore //[ nonce ]
+
+  /// -- hash _data --
+  // copy _data into mem
+  msize //[ hash_img_ptr nonce ]
+  CD_OST_DATA() calldataload 0x04 add //[ cd_ptr_data hash_img_ptr nonce ]
+  dup1 calldataload //[ len(data) cd_ptr_data hash_img_ptr nonce ]
+  // calldatacopy(dstOst, ost, len)
+  dup1 swap2 0x20 add dup4
+  //[ hash_img_ptr cd_ptr_data+32 len(data) len(data) hash_img_ptr nonce ]
+  calldatacopy //[ len(data) hash_img_ptr nonce ]
+
+  // sha3(hash_img_ptr, len(data))
+  dup2 sha3 //[ hash(_data) hash_img_ptr nonce ]
+
+  // -- keccak(EXEC_THASH, _target, _ctype nonce, _txFas, _value, keccak(_data))
+  dup2 PUSH_EXEC_TYPEHASH() dup2 mstore //[ hash_img_ptr hash(_data) hash_img_ptr nonce ]
+  0x20 add CD_OST_TARG() calldataload dup2 mstore //[ hash_img_ptr+32 hash(_data) hash_img_ptr nonce ]
+  0x20 add CD_OST_CTYPE() calldataload dup2 mstore //[ hash_img_ptr+64 hash(_data) hash_img_ptr nonce ]
+  // original nonce
+  0x20 add dup4 dup2 mstore
+  0x20 add CD_OST_GAS() calldataload dup2 mstore //[ hash_img_ptr+96 hash(_data) hash_img_ptr nonce ]
+  0x20 add CD_OST_VAL() calldataload dup2 mstore //[ hash_img_ptr+128 hash(_data) hash_img_ptr nonce ]
+  0x20 add mstore //[ hash_img_ptr nonce ]
+  // 0xe0 is size of data to hash (7*32)
+  dup1 0xe0 swap1 sha3 //[ hash(struct) hash_img_ptr nonce ]
+
+  // -- keccak(0x1901, domSep, hash(struct)) -- overwrites previous hash img
+  swap1 //[ hash_img_ptr hash(struct) nonce ]
+  0x1901 dup2 mstore //[ hash_img_ptr hash(struct) nonce ]
+  // ^ stores 0x0000...1901 at hash_img_ptr, so need to hash from ptr+30
+  dup1 0x1e add swap1 //[ hash_img_ptr hash_img_ptr+30 hash(struct) nonce ]
+
+  // domsep
+  0x20 add 0x20 mload dup2 mstore //[ hash_img_ptr+32 hash_img_ptr+30 hash(struct) nonce ]
+  0x20 add dup3 swap1 mstore //[ hash_img_ptr+30 hash(struct) nonce ]
+  // is size of data to hash (2*32+2)
+  0x42 swap1 sha3 //[ digest hash(struct) nonce ]
+  // ^^ generate digest
+
+  // -- validate signatures --
+  // get start of sigs
+  CD_OST_SIGS() calldataload 0x24 add //[ sigs_ptr+32 digest ...]
+  0x00 mload //[ thresh sigs_ptr+32 digest ]
+  // start with fresh mem, but we could just overwrite starting at hash_img_ptr
+  msize //[ ecrec_ptr thresh sigs_ptr+32 digest ]
+  0x00 dup1 // [ i signerIdx ecrec_ptr thresh sigs_ptr+32 digest ]
+
+  // use first 32 bytes of mem for returndata from ecrecover precompile call
+  check_next_sig_dst:
+    dup4 dup2 // [ i thresh i signerIdx ecrec_ptr thresh sigs_ptr+32 digest ]
+    // if (i >= thresh), jump to do_call_dst
+    lt iszero do_call_dst jumpi // [ i signerIdx ecrec_ptr thresh sigs_ptr+32 digest ]
+    // get sigIdx
+    dup1 0x41 mul // [ sigIdx i signerIdx ecrec_ptr thresh sigs_ptr+32 digest ]
+
+    dup4 0x20 add //[ ecrec_ptr+32 sigIdx i signerIdx ecrec_ptr thresh sigs_ptr+32 digest ]
+    // TODO: can do this outside of loop
+    // store digest
+    dup8 dup2 mstore
+
+    // copy over r and s
+    // calldatacopy(dstOst, ost, len)
+    0x40 dup8 dup4 add dup3 0x40 add //[ ecrec_ptr+96 sigs_ptr+32+sigIdx 0x40 ...]
+    // calldatacopy(ecrec_ptr+96, sigs_ptr+32+sigIdx, 64)
+    calldatacopy //[ ecrec_ptr+32 sigIdx i signerIdx ecrec_ptr thresh sigs_ptr+32 digest ]
+
+    // store v
+    // calldataload(sigs_ptr+33+sigIdx+32)
+    dup7 dup3 0x21 add add // [ sigs_ptr+32+sigIdx+33 ecrec_ptr+32 ..]
+    calldataload 0xff and //[ v ecrec_ptr+32 ]
+    dup2 0x20 add mstore //[ ecrec_ptr+32 sigIdx i signerIdx ecrec_ptr thresh sigs_ptr+32 digest ]
+
+    0x20 dup6 0x80 //[ 0x80 ecrec_ptr 0x20 ..]
+    dup4 0x01 gas //[ gas 0x01 ecrec_ptr+32 0x80 ecrec_ptr 32 ..]
+    // staticcall(gas, addr, argOst, argLen, retOst, retLen)
+    // staticcall(gas, 1, ecrec_ptr+32, 128, ecrec_ptr, 32)
+    staticcall //[ success ..]
+
+    // check success
+    iszero <throw_dst> jumpi //[ ecrec_ptr+32 sigIdx i signerIdx ecrec_ptr thresh sigs_ptr+32 digest ]
+
+    // get recovered signer
+    dup5 mload //[ signer ecrec_ptr+32 sigIdx i signerIdx ecrec_ptr thresh sigs_ptr+32 digest ]
+
+    // loop through signers and check if signer in signers
+    // j := signerIdx
+    dup5 swap1 //[ signer j ..]
+    check_next_signer_dst:
+      // if j >= len(signers): revert
+      dup2 0x40 mload //[ len(signers) j signer j ]
+      gt iszero <throw_dst> jumpi //[ signer j ]
+
+      // check if signer == signers[j]
+      dup2 0x20 mul 0x60 add mload // [ signers[j] signer j ]
+      eq is_match_dst jumpi // [ j ]
+
+      // if signer != signers[j]
+        // inc j
+        // jump to check_next_signer_dst
+      0x01 add //[ j+1 ]
+      check_next_signer_dst jump
+
+
+      // if signer == signers[j]:
+        // inc i
+        // signerIdx := j
+        // jump to check_next_sig_dst
+      //[ j ecrec_ptr+32 sigIdx i signerIdx -- ecrec_ptr thresh sigs_ptr+32 digest ]
+      is_match_dst:
+        0x01 add //[ j+1 ecrec_ptr+32 sigIdx i signerIdx -- ecrec_ptr thresh sigs_ptr+32 digest ]
+        swap1 pop swap1 pop //[ j+1 i signerIdx -- ecrec_ptr thresh sigs_ptr+32 digest ]
+        swap2 pop //[ i j+1 -- ecrec_ptr thresh sigs_ptr+32 digest ]
+        0x01 add
+        // [ i+1 j+1 -- ecrec_ptr thresh sigs_ptr+32 digest ]
+        check_next_sig_dst jump
+
+      // if j >= len(signers): revert
+      // if signer == signers[j]:
+        // inc i
+        // signerIdx := j + 1
+        // jump to check_next_sig_dst
+      // else:
+        // inc j
+        // jump to check_next_signer_dst
+
+  do_call_dst:
+    // TODO: for now, revert unless ctype == CALL
+    CD_OST_CTYPE() calldataload <throw_dst> jumpi
+
+    // overrite mem at 0x00 (where thresh, domsep, and signers were copied)
+    0x00 dup1 //[ 0 0 ..]
+    CD_OST_DATA() calldataload 0x04 add dup1 //[ cd_ptr_data cd_ptr_data 0 0 ]
+    calldataload //[ len(data) cd_ptr_data 0 0 ]
+    // calldatacopy(dstOst, ost, len)
+    dup1 swap2 0x00 //[ 0 cd_ptr_data len(data) len(data) 0 0 ]
+    // calldatacopy(0x00, cd_ptr_data, len(data))
+    calldatacopy  //[ len(data) 0 0 ]
+    0x00 //[ 0 len(data) 0 0 ]
+    CD_OST_VAL() calldataload CD_OST_TARG() calldataload
+    CD_OST_GAS() calldataload // TODO: check gas sent with call
+    //[ txGas targ val data_ptr len(data) 0 0 ]
+    // call(gas, addr, val, argOst, argLen, retOst, retLen)
+    call
+    //[ success ]
+    iszero <throw_dst> jumpi
+    0x01 0x00 mstore 0x20 0x00 return
+
+  // checks on well-formedness of _sigs
+  // 0x100000000 dup2 gt <throw_dst> jumpi //[ sigs_ptr ]
+  // dup1 0x04 0x20 add add calldatasize gt jumpi //[ sigs_ptr ]
+  // calldataload //[ sigs_ost ]
+  // 0x100000000 dup2 gt <throw_dst> jumpi
+  // dup1 0x04 0x20 add add dup1 calldatasize gt jumpi //[ sigs_ost sigs_ost+4+32 ]
+  // dup2 calldataload //[ sigs_ost sigs_ost+4+32 len(sigs) ]
+  // calldatasize dup3 dup3 add gt 0x100000000 dup3 gt or <throw_dst> jumpi
 
   // copy all appended data into mem
   // dup1 CODECOPY_TO_END<rt_len>() // [ 00 ]
