@@ -11,7 +11,7 @@ const constructorParsed = parser.parseFile('constructor.huff', modulesPath)
 const runtimeShallow = parser.processMacro(
   'RUNTIME',
   0,
-  [ '0xaa' ],
+  [ '0xaaaa' ],
   msigParsed.macros,
   msigParsed.inputMap,
   msigParsed.jumptables
@@ -20,13 +20,17 @@ const runtimeShallow = parser.processMacro(
 const constructorShallow = parser.processMacro(
   'CONSTRUCTOR',
   0,
-  [ '0xaaaa', '0xaa' ],
+  [ '0xaaaa', '0xaaaa' ],
   constructorParsed.macros,
   constructorParsed.inputMap,
   constructorParsed.jumptables
 ).data.bytecode;
 
-check(lenBytes(runtimeShallow) <= 255, 'bad runtime length estimate');
+check(
+  lenBytes(runtimeShallow) > 255 &&
+  lenBytes(runtimeShallow) + 64 <= 65525,
+  'bad runtime length estimate'
+);
 check(
   lenBytes(constructorShallow) > 255 &&
   lenBytes(constructorShallow) <= 65525,
