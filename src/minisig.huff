@@ -11,14 +11,14 @@
 // [] -> [ constant ]
 
 /// Function signatures
-#define macro PUSH_EXEC_FUNC_SIG = takes(0) returns(1) { 0xb0fddf53 }
+#define macro PUSH_EXEC_FUNC_SIG = takes(0) returns(1) { 0xf076314f }
 #define macro PUSH_SIGNERS_FUNC_SIG = takes(0) returns(1) { 0x43761ca7 }
 #define macro PUSH_THRESHOLD_FUNC_SIG = takes(0) returns(1) { 0x42cde4e8 }
 #define macro PUSH_DOMSEP_FUNC_SIG = takes(0) returns(1) { 0x3644e515 }
 
 /// EIP-712
 // keccak256("Execute(uint8 callType,address target,uint256 value,uint256 expiryBlock,bytes data)");
-#define macro PUSH_EXEC_TYPEHASH = takes(0) returns(1) { 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff }
+#define macro PUSH_EXEC_TYPEHASH = takes(0) returns(1) { 0x9c1370cbf5462da152553d1b9556f96a7eb4dfe28fbe07e763227834d409103a }
 
 // --- Utils ---
 
