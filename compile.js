@@ -63,9 +63,13 @@ console.log(`runtime size     : ${lenBytes(runtime)} bytes`);
 console.log(`constructor size : ${lenBytes(constructor)} bytes`);
 
 const dummmyConstructorArgs = '000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000003000000000000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa000000000000000000000000bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb000000000000000000000000ffffffffffffffffffffffffffffffffffffffff'
-const initCode = bytecode + dummmyConstructorArgs
+const initCode = bytecode + dummmyConstructorArgs;
 writeBin('minisig-cstr.bin', constructor);
 writeBin('minisig-init.bin', initCode);
+
+const populatedVals = '00000000000000000000000000000000000000000000000000000000000000026edd5fb8f80f6e3e748e6da8ed3048cd085077429aa0a80a7994c1b59363470f00000000000000000000000000000000000000000000000000000000000000030000000000000000000000001eEE1d40A057D50C84a7bD5632e553eDf4beb93b00000000000000000000000070BBEd4c4D037e89E1e606997C0E5671f7c38D7f0000000000000000000000009b410c059f3b0E0B45A747a34D4Bf5431c282921';
+const populatedCode = runtime + populatedVals;
+writeBin('minisig-runtime-populated.bin', populatedCode);
 
 function lenBytes(str) {
   return trimBytes(str).length / 2
