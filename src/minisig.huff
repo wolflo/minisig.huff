@@ -322,6 +322,27 @@ template <pure_funcs_dst>
   pop // []
 }
 
+
+// replaces DISPATCH_PURE_FUNCS for implementation with only nonce() getter
+// [ calldata[:4] 00 ] -> return
+template <throw_dst, stop_dst>
+#define macro NONCE_OR_FALLBACK = takes(1) returns(0) {
+  // (payable receive function)
+  // if calldatasize == 0, jump to stop
+  calldatasize iszero <stop_dst> jumpi  // [ calldata[:4] 00 ]
+
+  // require(callvalue == 0 && calldatasize == 4)
+  callvalue iszero calldatasize 0x04 eq // [ (calldatasize == 4) (callvalue == 0) calldata[:4] 00 ]
+  and iszero <throw_dst> jumpi // [ calldata[:4] 00 ]
+
+  PUSH_NONCE_FUNC_SIG() eq nonce_dst jumpi
+
+  nonce_dst:
+    RET_NONCE()
+
+  <throw_dst> jump  // revert if we have non-empty calldata but no matches todo
+}
+
 // [ calldata[:4] 00 ] -> return
 template <throw_dst, stop_dst, rt_len>
 #define macro DISPATCH_PURE_FUNCS = takes(1) returns(0) {
@@ -365,7 +386,8 @@ template <rt_len>
   EXEC<throw_dst, stop_dst, rt_len>()
 
   pure_funcs_dst:
-    DISPATCH_PURE_FUNCS<throw_dst, stop_dst, rt_len>()
+    // DISPATCH_PURE_FUNCS<throw_dst, stop_dst, rt_len>()
+    NONCE_OR_FALLBACK<throw_dst, stop_dst>()
 
   throw_dst:
     0x00 dup1 revert
