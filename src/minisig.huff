@@ -15,18 +15,19 @@
 #define macro PUSH_SIGNERS_FUNC_SIG = takes(0) returns(1) { 0x43761ca7 }
 #define macro PUSH_THRESHOLD_FUNC_SIG = takes(0) returns(1) { 0x42cde4e8 }
 #define macro PUSH_DOMSEP_FUNC_SIG = takes(0) returns(1) { 0x3644e515 }
+#define macro PUSH_NONCE_FUNC_SIG = takes(0) returns(1) { 0xaffed0e0 }
 
 /// EIP-712
 // keccak256("Execute(uint8 callType,address target,uint256 value,uint256 expiryBlock,bytes data)");
 #define macro PUSH_EXEC_TYPEHASH = takes(0) returns(1) { 0x9c1370cbf5462da152553d1b9556f96a7eb4dfe28fbe07e763227834d409103a }
 
 /// Calldata offsets (includes 4 byte sig)
-#define macro CD_OST_TARG  = takes(0) returns(1) { 0x04 }  // 4
-#define macro CD_OST_CTYPE = takes(0) returns(1) { 0x24 } // 36
-#define macro CD_OST_GAS   = takes(0) returns(1) { 0x44 } // 68
-#define macro CD_OST_VAL   = takes(0) returns(1) { 0x64 } // 100
-#define macro CD_OST_DATA  = takes(0) returns(1) { 0x84 }  // 132
-#define macro CD_OST_SIGS  = takes(0) returns(1) { 0xa4 }  // 164
+#define macro CD_OST_TARG  = takes(0) returns(1) { 0x04 }   // 4
+#define macro CD_OST_CTYPE = takes(0) returns(1) { 0x24 }   // 36
+#define macro CD_OST_GAS   = takes(0) returns(1) { 0x44 }   // 68
+#define macro CD_OST_VAL   = takes(0) returns(1) { 0x64 }   // 100
+#define macro CD_OST_DATA  = takes(0) returns(1) { 0x84 }   // 132
+#define macro CD_OST_SIGS  = takes(0) returns(1) { 0xa4 }   // 164
 
 
 // --- Utils ---
@@ -80,6 +81,11 @@ template <rt_len>
   mul 0x40 add swap1 // [ 00 (64 + (32 * len(signers))) ]
   // return(ost, len)
   return
+}
+
+// [ ] -> return
+#define macro RET_NONCE = takes(0) returns(1) {
+  0x00 sload 0x00 mstore 0x20 0x00 return
 }
 
 // --- Execute ---
@@ -306,6 +312,7 @@ template <throw_dst, stop_dst, rt_len>
   // todo:
   PUSH_THRESHOLD_FUNC_SIG() eq threshold_dst jumpi // [ 00 calldata[:4] ]
   dup2 PUSH_DOMSEP_FUNC_SIG() eq dom_sep_dst jumpi // [ 00 calldata[:4] ]
+  dup2 PUSH_NONCE_FUNC_SIG() eq nonce_dst jumpi    // [ 00 calldata[:4] ]
   swap1 PUSH_SIGNERS_FUNC_SIG() eq signers_dst jumpi // [ 00 ]
   <throw_dst> jump  // revert if we have non-empty calldata but no matches todo: replace with in-place revert?
 
@@ -313,6 +320,8 @@ template <throw_dst, stop_dst, rt_len>
     RET_THRESHOLD<rt_len>()
   dom_sep_dst:
     RET_DOMSEP<rt_len>()
+  nonce_dst:
+    RET_NONCE()
   signers_dst:
     RET_SIGNERS<rt_len>()
 }
