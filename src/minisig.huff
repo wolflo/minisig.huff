@@ -244,16 +244,17 @@ template <throw_dst, stop_dst, rt_len>
         // jump to check_next_signer_dst
 
   do_call_dst:
-    // TODO: for now, revert unless ctype == CALL
-    CD_OST_CTYPE() calldataload <throw_dst> jumpi
+    // If ctype > 0, jump to delegatecall branch
+    CD_OST_CTYPE() calldataload do_dcall_dst jumpi
 
     // overrite mem at 0x00 (where thresh, domsep, and signers were copied)
     0x00 dup1 //[ 0 0 ..]
     CD_OST_DATA() calldataload 0x04 add dup1 //[ cd_ptr_data cd_ptr_data 0 0 ]
     calldataload //[ len(data) cd_ptr_data 0 0 ]
     // calldatacopy(dstOst, ost, len)
-    dup1 swap2 0x00 //[ 0 cd_ptr_data len(data) len(data) 0 0 ]
-    // calldatacopy(0x00, cd_ptr_data, len(data))
+    dup1 swap2    //[ cd_ptr_data len(data) len(data) 0 0 ]
+    0x20 add 0x00 //[ 0 cd_ptr_data+32 len(data) len(data) 0 0 ]
+    // calldatacopy(0x00, cd_ptr_data+32, len(data))
     calldatacopy  //[ len(data) 0 0 ]
     0x00 //[ 0 len(data) 0 0 ]
     CD_OST_VAL() calldataload CD_OST_TARG() calldataload
@@ -263,7 +264,32 @@ template <throw_dst, stop_dst, rt_len>
     call
     //[ success ]
     iszero <throw_dst> jumpi
-    0x01 0x00 mstore 0x20 0x00 return
+    stop
+
+  do_dcall_dst:
+    // If ctype != 1, revert
+    CD_OST_CTYPE() calldataload 0x01 eq iszero <throw_dst> jumpi
+
+    // if _value != msg.value, revert
+    CD_OST_VAL() calldataload callvalue eq iszero <throw_dst> jumpi
+
+    CD_OST_DATA() calldataload 0x04 add dup1 //[ cd_ptr_data cd_ptr_data 0 0 ]
+    calldataload //[ len(data) cd_ptr_data 0 0 ]
+    // calldatacopy(dstOst, ost, len)
+    dup1 swap2    //[ cd_ptr_data len(data) len(data) 0 0 ]
+    0x20 add 0x00 //[ 0 cd_ptr_data+32 len(data) len(data) 0 0 ]
+    // calldatacopy(0x00, cd_ptr_data, len(data))
+    calldatacopy //[ len(data) 0 0 ]
+    0x00 //[ 0 len(data) 0 0 ]
+    CD_OST_TARG() calldataload
+    CD_OST_GAS() calldataload
+    // [ txGas targ data_ptr len(data) 0 0 ]
+    // delegatecall(gas, addr, argOst, argLen, retOst, retLen)
+    delegatecall
+    //[ success ]
+    iszero <throw_dst> jumpi
+    stop
+
 
   // checks on well-formedness of _sigs
   // 0x100000000 dup2 gt <throw_dst> jumpi //[ sigs_ptr ]
