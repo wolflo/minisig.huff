@@ -17,7 +17,7 @@
 
 // [ ] -> [ typehash ]
 // keccak256("EIP712Domain(uint256 chainId,uint256 deployBlock,address verifyingContract)");
-#define macro PUSH_DOMSEP_TYPEHASH = takes(0) returns(1) { 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff }
+#define macro PUSH_DOMSEP_TYPEHASH = takes(0) returns(1) { 0x0a684fcd4736a0673611bfe1e61ceb93fb09bcd288bc72c1155ebe13280ffeca }
 
 // [ ] -> [ domain_separator ]
 // keccak256(abi.encode(DOMSEP_TYPEHASH, chainId, block.number, address(this)))
