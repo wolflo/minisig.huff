@@ -5,6 +5,7 @@ import utils.constants as C
 class CallType:
     CALL = 0
     DELEGATECALL = 1
+    INVALID = 2
 
 @dataclass
 class Action:
@@ -13,3 +14,9 @@ class Action:
     gas: int = 2300
     value: int = 0
     data: str = C.EMPTY_BYTES
+
+@dataclass
+class MinisigImmutables:
+    threshold: int
+    domain_separator: str
+    signers: [str]

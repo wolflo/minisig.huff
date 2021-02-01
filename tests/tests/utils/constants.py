@@ -3,6 +3,7 @@ import brownie
 
 # signers mnemonic
 MNEMONIC = "trim amount saddle learn guitar estate body this harsh never mango swarm";
+OTHER_MNEMONIC = "fancy equal chaos whale run room execute vivid oven rabbit tag actress";
 
 # deployment parameters
 THRESHOLD = 3
@@ -15,3 +16,5 @@ VM_ERR_MSG = 'VM Exception while processing transaction: revert'
 
 # no idea why this is so difficult
 EMPTY_BYTES = brownie.convert.datatypes.HexString(b'', 'bytes')
+
+ADDRESS_EMPTY = '0x029aCd3832a9FE274AEC52377F4134AEC4Cb86D1'

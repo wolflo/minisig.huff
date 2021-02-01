@@ -32,6 +32,11 @@ def usr_ids(usrs):
     return [ u.address for u in usrs ]
 
 @pytest.fixture(scope="module")
+def any_signers():
+    unsorted = utils.derive_accts(C.OTHER_MNEMONIC, C.NUM_SIGNERS)
+    return sorted(unsorted, key = lambda x: x.address)
+
+@pytest.fixture(scope="module")
 def anyone(accounts):
     return accounts[0]
 
@@ -45,6 +50,7 @@ def MinisigHuff(IMinisig, deployer):
 
 @pytest.fixture(scope="module")
 def msig(IMinisig, MinisigHuff, deployer, anyone, usr_ids):
-    tx = MinisigHuff.constructor(C.THRESHOLD, usr_ids).transact()
-    receipt = brownie.network.transaction.TransactionReceipt(tx)
-    return IMinisig.at(receipt.contract_address, tx=receipt, owner=anyone)
+    init_code = MinisigHuff.constructor(C.THRESHOLD, usr_ids).data_in_transaction
+    tx = deployer.transfer(data=init_code)
+    print(f'deploy gas: {tx.gas_used}')
+    return IMinisig.at(tx.contract_address, tx=tx, owner=anyone)
