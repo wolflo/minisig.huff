@@ -37,9 +37,19 @@ def encode_digest(inst, nonce, action):
     dom_sep = encode_dom_sep(inst)
     hash_data = web3.solidityKeccak(['bytes'], [action.data])
     struct_preimg = encode_abi(
-        ['bytes32', 'address', 'uint8', 'uint256', 'uint256', 'uint256', 'bytes32' ],
+        [
+            'bytes32',
+            'address',
+            'address',
+            'uint8',
+            'uint256',
+            'uint256',
+            'uint256',
+            'bytes32'
+        ],
         [
             bytes.fromhex(C.EXECUTE_TYPEHASH[2:]),
+            action.source,
             action.target,
             action.type,
             nonce,
@@ -68,6 +78,7 @@ def signAndExecute(inst, usrs, action, opts={}):
     )
     sigs = allSign(usrs, digest)
     return inst.execute(
+        action.source,
         action.target,
         action.type,
         action.gas,
@@ -82,6 +93,7 @@ def signAndEncodeCalldata(inst, usrs, action):
     digest = encode_digest(inst, nonce, action)
     sigs = allSign(usrs, digest)
     return inst.execute.encode_input(
+        action.source,
         action.target,
         action.type,
         action.gas,
@@ -110,3 +122,9 @@ def parse_immutables(msig):
     signers = [ checksum(addr) for addr in signers ]
 
     return MinisigImmutables(threshold, dom_sep, signers)
+
+def log_hevm_debug(msig, usrs, action):
+    calldata = signAndEncodeCalldata(msig, usrs, action)
+    bytecode = bytes.hex(web3.eth.getCode(msig.address))
+    print(f'calldata: {calldata}\n')
+    print(f'bytecode: {bytecode}\n')

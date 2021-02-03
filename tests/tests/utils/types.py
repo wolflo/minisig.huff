@@ -11,6 +11,7 @@ class CallType:
 class Action:
     type: CallType
     target: str = C.ZERO_ADDRESS
+    source: str = C.ZERO_ADDRESS
     gas: int = 2300
     value: int = 0
     data: str = C.EMPTY_BYTES

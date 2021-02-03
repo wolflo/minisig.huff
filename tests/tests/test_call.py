@@ -11,9 +11,10 @@ web3 = brownie.web3
 
 # TODO:
 # - test fallback function
+# - test wrong / right source
 
 def test_call_empty(msig, mock, usrs):
-    action = Action(CallType.CALL, mock.address, 3000, 0, C.EMPTY_BYTES)
+    action = Action(CallType.CALL, mock.address, C.ZERO_ADDRESS, 3000, 0, C.EMPTY_BYTES)
     tx = signAndExecute(msig, usrs, action)
     executed = tx.events[-1]
     assert msig.nonce() == 1
@@ -24,7 +25,7 @@ def test_call_empty(msig, mock, usrs):
     assert executed['data'] == action.data
 
 def test_call_value_and_data(msig, mock, usrs):
-    action = Action(CallType.CALL, mock.address, 3000, 1, '0xabababab')
+    action = Action(CallType.CALL, mock.address, C.ZERO_ADDRESS, 3000, 1, '0xabababab')
     tx_value = 10
     tx = signAndExecute(msig, usrs, action, {'value': tx_value})
     call = tx.events[-1]
@@ -36,10 +37,10 @@ def test_call_value_and_data(msig, mock, usrs):
     assert call['data'] == action.data
     assert msig.balance() == tx_value - action.value
 
-def test_call_empty_target(msig, usrs):
+def test_call_empty_target(msig, usrs, anyone):
     value = 100
     tx_value = 150
-    action = Action(CallType.CALL, C.ADDRESS_EMPTY, 3000, value, '0xabababab')
+    action = Action(CallType.CALL, C.ADDRESS_EMPTY, C.ZERO_ADDRESS, 3000, value, '0xabababab')
     signAndExecute(msig, usrs, action, {'value': tx_value})
     assert web3.eth.getBalance(C.ADDRESS_EMPTY) == value
     assert msig.balance() == tx_value - value
@@ -47,7 +48,7 @@ def test_call_empty_target(msig, usrs):
 def test_call_value_no_callvalue(msig, usrs, anyone):
     bal0 = 1000
     value = 200
-    action = Action(CallType.CALL, C.ADDRESS_EMPTY, 3000, value)
+    action = Action(CallType.CALL, C.ADDRESS_EMPTY, C.ZERO_ADDRESS, 3000, value)
     anyone.transfer(msig.address, amount=bal0)
     signAndExecute(msig, usrs, action)
     assert web3.eth.getBalance(C.ADDRESS_EMPTY) == value
@@ -77,5 +78,13 @@ def test_fail_unordered_sigs(msig, usrs):
     digest = utils.encode_digest(msig, nonce, action)
     sigs = utils.allSign(bad_usrs, digest)
     with brownie.reverts():
-        msig.execute(action.target, action.type, action.gas, action.value, action.data, sigs)
+        msig.execute(
+            action.source,
+            action.target,
+            action.type,
+            action.gas,
+            action.value,
+            action.data,
+            sigs
+        )
 

@@ -11,23 +11,26 @@
 // [] -> [ constant ]
 
 /// Function signatures
-#define macro PUSH_EXEC_FUNC_SIG = takes(0) returns(1) { 0xf076314f }
-#define macro PUSH_SIGNERS_FUNC_SIG = takes(0) returns(1) { 0x43761ca7 }
-#define macro PUSH_THRESHOLD_FUNC_SIG = takes(0) returns(1) { 0x42cde4e8 }
-#define macro PUSH_DOMSEP_FUNC_SIG = takes(0) returns(1) { 0x3644e515 }
-#define macro PUSH_NONCE_FUNC_SIG = takes(0) returns(1) { 0xaffed0e0 }
+// execute(address source, address target, uint8 callType, uint256 callGas, uint256 value, bytes data, bytes sigs)
+#define macro PUSH_EXEC_FN_SIG = takes(0) returns (1) { 0xabd2b4c0 }
+#define macro PUSH_SIGNERS_FN_SIG = takes(0) returns(1) { 0x43761ca7 }
+#define macro PUSH_THRESHOLD_FN_SIG = takes(0) returns(1) { 0x42cde4e8 }
+#define macro PUSH_DOMSEP_FN_SIG = takes(0) returns(1) { 0x3644e515 }
+#define macro PUSH_NONCE_FN_SIG = takes(0) returns(1) { 0xaffed0e0 }
 
 /// EIP-712
+// TODO: update typehash
 // keccak256("Execute(uint8 callType,address target,uint256 value,uint256 expiryBlock,bytes data)");
 #define macro PUSH_EXEC_TYPEHASH = takes(0) returns(1) { 0x9c1370cbf5462da152553d1b9556f96a7eb4dfe28fbe07e763227834d409103a }
 
 /// Calldata offsets (includes 4 byte sig)
-#define macro CD_OST_TARG  = takes(0) returns(1) { 0x04 }   // 4
-#define macro CD_OST_CTYPE = takes(0) returns(1) { 0x24 }   // 36
-#define macro CD_OST_GAS   = takes(0) returns(1) { 0x44 }   // 68
-#define macro CD_OST_VAL   = takes(0) returns(1) { 0x64 }   // 100
-#define macro CD_OST_DATA  = takes(0) returns(1) { 0x84 }   // 132
-#define macro CD_OST_SIGS  = takes(0) returns(1) { 0xa4 }   // 164
+#define macro CD_OST_SRC   = takes(0) returns(1) { 0x04 }   // 4
+#define macro CD_OST_TARG  = takes(0) returns(1) { 0x24 }   // 36
+#define macro CD_OST_CTYPE = takes(0) returns(1) { 0x44 }   // 68
+#define macro CD_OST_GAS   = takes(0) returns(1) { 0x64 }   // 100
+#define macro CD_OST_VAL   = takes(0) returns(1) { 0x84 }   // 132
+#define macro CD_OST_DATA  = takes(0) returns(1) { 0xa4 }   // 164
+#define macro CD_OST_SIGS  = takes(0) returns(1) { 0xc4 }   // 196
 
 
 // --- Utils ---
@@ -100,13 +103,18 @@ template <throw_dst, stop_dst, rt_len>
   // 60 : 60+32*(arr_len) elements of signers array
   // CALLDATA
   // {4 byte sig}
-  // {32 byte target}{32 byte callType}{32 byte txGas}{32 byte value}{data}{sigs}
+  // {32 byte source}{32 byte target}{32 byte callType}{32 byte callGas}
+  // {32 byte value}{data}{sigs}
 
-  // check calldatasize >= 196
-  0xc4 calldatasize lt <throw_dst> jumpi
+  // TODO: check against solidity's calldatasize requirement
+  // check calldatasize >= 288 (7 args, 2 of which have a minimum two-word encoding)
+  0x120 calldatasize lt <throw_dst> jumpi
 
   // copy appended data to mem
   0x00 CODECOPY_TO_END<rt_len>()
+
+  // check msg.sender == source || source == address(0)
+  CD_OST_SRC() calldataload dup1 iszero swap1 caller eq or iszero <throw_dst> jumpi
 
   // check len(_sigs) >= thresh * 65
   CD_OST_SIGS() calldataload //[ sigs_ptr ]
@@ -132,17 +140,24 @@ template <throw_dst, stop_dst, rt_len>
   // sha3(hash_img_ptr, len(data))
   dup2 sha3 //[ hash(_data) hash_img_ptr nonce ]
 
-  // -- keccak(EXEC_THASH, _target, _ctype nonce, _txFas, _value, keccak(_data))
+  // -- keccak(EXEC_THASH, _source, _target, _ctype, nonce, _callGas, _value, keccak(_data))
   dup2 PUSH_EXEC_TYPEHASH() dup2 mstore //[ hash_img_ptr hash(_data) hash_img_ptr nonce ]
-  0x20 add CD_OST_TARG() calldataload dup2 mstore //[ hash_img_ptr+32 hash(_data) hash_img_ptr nonce ]
-  0x20 add CD_OST_CTYPE() calldataload dup2 mstore //[ hash_img_ptr+64 hash(_data) hash_img_ptr nonce ]
+  0x20 add CD_OST_SRC() calldataload dup2 mstore //[ hash_img_ptr+32 hash(_data) hash_img_ptr nonce ]
+  0x20 add CD_OST_TARG() calldataload dup2 mstore //[ hash_img_ptr+64 hash(_data) hash_img_ptr nonce ]
+  0x20 add CD_OST_CTYPE() calldataload dup2 mstore //[ hash_img_ptr+96 hash(_data) hash_img_ptr nonce ]
+
+  // // -- keccak(EXEC_THASH, _target, _ctype nonce, _txFas, _value, keccak(_data))
+  // dup2 PUSH_EXEC_TYPEHASH() dup2 mstore //[ hash_img_ptr hash(_data) hash_img_ptr nonce ]
+  // 0x20 add CD_OST_TARG() calldataload dup2 mstore //[ hash_img_ptr+32 hash(_data) hash_img_ptr nonce ]
+  // 0x20 add CD_OST_CTYPE() calldataload dup2 mstore //[ hash_img_ptr+64 hash(_data) hash_img_ptr nonce ]
+
   // original nonce
   0x20 add dup4 dup2 mstore
-  0x20 add CD_OST_GAS() calldataload dup2 mstore //[ hash_img_ptr+96 hash(_data) hash_img_ptr nonce ]
-  0x20 add CD_OST_VAL() calldataload dup2 mstore //[ hash_img_ptr+128 hash(_data) hash_img_ptr nonce ]
+  0x20 add CD_OST_GAS() calldataload dup2 mstore //[ hash_img_ptr+128 hash(_data) hash_img_ptr nonce ]
+  0x20 add CD_OST_VAL() calldataload dup2 mstore //[ hash_img_ptr+160 hash(_data) hash_img_ptr nonce ]
   0x20 add mstore //[ hash_img_ptr nonce ]
-  // 0xe0 is size of data to hash (7*32)
-  dup1 0xe0 swap1 sha3 //[ hash(struct) hash_img_ptr nonce ]
+  // 0x100 is size of data to hash (8*32)
+  dup1 0x100 swap1 sha3 //[ hash(struct) hash_img_ptr nonce ]
 
   // -- keccak(0x1901, domSep, hash(struct)) -- overwrites previous hash img
   swap1 //[ hash_img_ptr hash(struct) nonce ]
@@ -259,7 +274,7 @@ template <throw_dst, stop_dst, rt_len>
     0x00 //[ 0 len(data) 0 0 ]
     CD_OST_VAL() calldataload CD_OST_TARG() calldataload
     CD_OST_GAS() calldataload // TODO: check gas sent with call
-    //[ txGas targ val data_ptr len(data) 0 0 ]
+    //[ callGas targ val data_ptr len(data) 0 0 ]
     // call(gas, addr, val, argOst, argLen, retOst, retLen)
     call
     //[ success ]
@@ -283,7 +298,7 @@ template <throw_dst, stop_dst, rt_len>
     0x00 //[ 0 len(data) 0 0 ]
     CD_OST_TARG() calldataload
     CD_OST_GAS() calldataload
-    // [ txGas targ data_ptr len(data) 0 0 ]
+    // [ callGas targ data_ptr len(data) 0 0 ]
     // delegatecall(gas, addr, argOst, argLen, retOst, retLen)
     delegatecall
     //[ success ]
@@ -317,13 +332,13 @@ template <throw_dst, stop_dst, rt_len>
 template <pure_funcs_dst>
 #define macro DISPATCH = takes(1) returns(0) {
   calldataload 0xe0 shr dup1  // [ calldata[:4] calldata[:4] ]
-  PUSH_EXEC_FUNC_SIG() eq iszero  // [ (calldata[:4] != execute_sig) calldata[:4] ]
+  PUSH_EXEC_FN_SIG() eq iszero  // [ (calldata[:4] != execute_sig) calldata[:4] ]
   <pure_funcs_dst> jumpi // jumps to pure_func dispatcher with func sig on stack
   pop // []
 }
 
 
-// replaces DISPATCH_PURE_FUNCS for implementation with only nonce() getter
+// replaces DISPATCH_PURE_FNS for implementation with only nonce() getter
 // [ calldata[:4] 00 ] -> return
 template <throw_dst, stop_dst>
 #define macro NONCE_OR_FALLBACK = takes(1) returns(0) {
@@ -335,7 +350,7 @@ template <throw_dst, stop_dst>
   callvalue iszero calldatasize 0x04 eq // [ (calldatasize == 4) (callvalue == 0) calldata[:4] 00 ]
   and iszero <throw_dst> jumpi // [ calldata[:4] 00 ]
 
-  PUSH_NONCE_FUNC_SIG() eq nonce_dst jumpi
+  PUSH_NONCE_FN_SIG() eq nonce_dst jumpi
 
   <throw_dst> jump  // revert if we have non-empty calldata but no matches todo
 
@@ -345,7 +360,7 @@ template <throw_dst, stop_dst>
 
 // [ calldata[:4] 00 ] -> return
 template <throw_dst, stop_dst, rt_len>
-#define macro DISPATCH_PURE_FUNCS = takes(1) returns(0) {
+#define macro DISPATCH_PURE_FNS = takes(1) returns(0) {
 
   // (payable receive function)
   // if calldatasize == 0, jump to stop
@@ -357,10 +372,10 @@ template <throw_dst, stop_dst, rt_len>
 
   swap1 dup2 // [ calldata[:4] 00 calldata[:4] ]
   // todo:
-  PUSH_THRESHOLD_FUNC_SIG() eq threshold_dst jumpi // [ 00 calldata[:4] ]
-  dup2 PUSH_DOMSEP_FUNC_SIG() eq dom_sep_dst jumpi // [ 00 calldata[:4] ]
-  dup2 PUSH_NONCE_FUNC_SIG() eq nonce_dst jumpi    // [ 00 calldata[:4] ]
-  swap1 PUSH_SIGNERS_FUNC_SIG() eq signers_dst jumpi // [ 00 ]
+  PUSH_THRESHOLD_FN_SIG() eq threshold_dst jumpi // [ 00 calldata[:4] ]
+  dup2 PUSH_DOMSEP_FN_SIG() eq dom_sep_dst jumpi // [ 00 calldata[:4] ]
+  dup2 PUSH_NONCE_FN_SIG() eq nonce_dst jumpi    // [ 00 calldata[:4] ]
+  swap1 PUSH_SIGNERS_FN_SIG() eq signers_dst jumpi // [ 00 ]
   <throw_dst> jump  // revert if we have non-empty calldata but no matches todo: replace with in-place revert?
 
   threshold_dst:
@@ -386,7 +401,7 @@ template <rt_len>
   EXEC<throw_dst, stop_dst, rt_len>()
 
   pure_funcs_dst:
-    // DISPATCH_PURE_FUNCS<throw_dst, stop_dst, rt_len>()
+    // DISPATCH_PURE_FNS<throw_dst, stop_dst, rt_len>()
     NONCE_OR_FALLBACK<throw_dst, stop_dst>()
 
   throw_dst:
