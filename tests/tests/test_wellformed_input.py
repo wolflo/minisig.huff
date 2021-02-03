@@ -7,7 +7,6 @@ from utils.utils import signAndExecute
 import utils.utils as utils
 import utils.constants as C
 
-# TODO
 def test_fail_short_calldata(msig, usrs, anyone):
     action = Action(CallType.CALL)
     cdata = utils.signAndEncodeCalldata(msig, usrs, action)
@@ -27,3 +26,8 @@ def test_fail_short_signature(msig, usrs, anyone):
 def test_fail_bad_calltype(msig, usrs):
     with brownie.reverts():
         signAndExecute(msig, usrs, Action(CallType.INVALID))
+
+# 4 bytes of nonmatching calldata, no value
+def test_fail_nonmatching_calldata(msig, anyone):
+    with brownie.reverts():
+        anyone.transfer(msig.address, data='0xacabacab')
