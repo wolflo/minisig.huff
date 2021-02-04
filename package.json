@@ -6,7 +6,9 @@
   "description": "Minimal evm multisig",
   "main": "index.js",
   "scripts": {
-    "compile": "node compile.js"
+    "compile": "node compile.js",
+    "test": "yarn compile && cd tests/ && brownie test",
+    "debug": "./tests/hevm/hevm-debug"
   },
   "devDependencies": {},
   "dependencies": {
