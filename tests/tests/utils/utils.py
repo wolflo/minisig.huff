@@ -123,8 +123,10 @@ def parse_immutables(msig):
 
     return MinisigImmutables(threshold, dom_sep, signers)
 
-def log_hevm_debug(msig, usrs, action):
+def write_hevm_debug(msig, usrs, action):
     calldata = signAndEncodeCalldata(msig, usrs, action)
     bytecode = bytes.hex(web3.eth.getCode(msig.address))
-    print(f'calldata: {calldata}\n')
-    print(f'bytecode: {bytecode}\n')
+    with open('./hevm/calldata.bin', 'w') as f:
+        f.write(calldata[2:])
+    with open('./hevm/bytecode.bin', 'w') as f:
+        f.write(bytecode)

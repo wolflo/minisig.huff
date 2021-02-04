@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+dir="$(dirname "${BASH_SOURCE[0]:-$0}")"
+ADDRESS=0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa
+CALLER=0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC
+BYTECODE=$(cat ${dir}/bytecode.bin)
+CALLDATA=$(cat ${dir}/calldata.bin)
+GAS=0xffffff
+VALUE=1
+BLOCK_NUM=9069000
+CHAIN_ID=1337
+
+hevm exec --debug               \
+          --gas      $GAS       \
+          --value    $VALUE     \
+          --address  $ADDRESS   \
+          --code     $BYTECODE  \
+          --caller   $CALLER    \
+          --calldata $CALLDATA  \
+          --number   $BLOCK_NUM \
+          --chainid  $CHAIN_ID  \
+          # --create
