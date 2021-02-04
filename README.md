@@ -15,6 +15,7 @@ This is unfinished and unaudited code, but it's complete enough to play around w
 * `yarn test`
 
 ## Debug
-* generate the runtime bytecode and calldata for a specific test by inserting `utils.write_hev_debug(msig, usrs, action)`
+* generate the runtime bytecode and calldata for a specific test by inserting: 
+    * `utils.write_hevm_debug(msig, usrs, action)`
 * `yarn test`
 * `yarn debug` (requires [hevm](https://github.com/dapphub/dapptools))
