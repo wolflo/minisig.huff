@@ -25,7 +25,7 @@ def deployer(accounts):
 @pytest.fixture(scope="module")
 def usrs():
     unsorted = utils.derive_accts(C.MNEMONIC, C.NUM_SIGNERS)
-    return sorted(unsorted, key = lambda x: x.address)
+    return sorted(unsorted, key = lambda x: int(x.address, 16))
 
 @pytest.fixture(scope="module")
 def usr_ids(usrs):
@@ -52,5 +52,4 @@ def MinisigHuff(IMinisig, deployer):
 def msig(IMinisig, MinisigHuff, deployer, anyone, usr_ids):
     init_code = MinisigHuff.constructor(C.THRESHOLD, usr_ids).data_in_transaction
     tx = deployer.transfer(data=init_code)
-    print(f'deploy gas: {tx.gas_used}')
     return IMinisig.at(tx.contract_address, tx=tx, owner=anyone)

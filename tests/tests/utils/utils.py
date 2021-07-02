@@ -1,5 +1,6 @@
 import brownie
 import eth_abi
+import json
 
 from eth_abi import encode_abi, decode_single
 from eth_account.messages import encode_structured_data
@@ -13,12 +14,23 @@ import utils.constants as C
 
 web3 = brownie.network.web3
 
-minisig_huff_runtime = ''
-with open('../out/minisig-runtime.bin', 'r') as f:
-    minisig_huff_runtime = f.readline().rstrip()
+MINISIG_HUFF_BYTECODE = open('../out/minisig.bin', 'r').readline().rstrip()
+MINISIG_HUFF_RUNTIME = open('../out/minisig-runtime.bin', 'r').readline().rstrip()
 
 def derive_accts(mnemonic, n):
     return [ web3.eth.account.from_mnemonic(C.MNEMONIC, f"m/44'/60'/0'/0/{i}") for i in range(n) ]
+
+def new_msig(deployer, threshold, signers):
+    IMinisig = brownie.IMinisig
+    web3.eth.defaultAccount = deployer.address
+    MinisigHuff = web3.eth.contract(
+        abi = IMinisig.abi,
+        bytecode=MINISIG_HUFF_BYTECODE
+    )
+    init_code = MinisigHuff.constructor(threshold, signers).data_in_transaction
+    tx = deployer.transfer(data=init_code)
+    msig = IMinisig.at(tx.contract_address, tx=tx, owner=deployer)
+    return (msig, tx.gas_used)
 
 def encode_dom_sep(inst):
     chain_id = brownie.network.chain.id
@@ -65,6 +77,8 @@ def encode_digest(inst, nonce, action):
     )
     return digest
 
+# lastNSign -> usrs[-n:]
+# firstNSign -> usrs[:n]
 def allSign(usrs, digest):
     sigs = [ bytes(u.signHash(digest).signature).hex() for u in usrs ]
     return ''.join(sigs)
@@ -110,7 +124,7 @@ def last_call_log(logs, abi):
 
 def parse_immutables(msig):
     deployed = bytes.hex(web3.eth.getCode(msig.address))
-    partition = deployed.partition(minisig_huff_runtime)
+    partition = deployed.partition(MINISIG_HUFF_RUNTIME)
     if partition[0] != '':
         raise ValueError("can't match bytecode")
 
@@ -130,3 +144,7 @@ def write_hevm_debug(msig, usrs, action):
         f.write(calldata[2:])
     with open('./hevm/bytecode.bin', 'w') as f:
         f.write(bytecode)
+
+def write_brownie_trace(path, tx):
+    with open(path, 'w') as f:
+        f.write(json.dumps(tx.trace, indent=2, separators=(',', ': ')))

@@ -3,6 +3,7 @@ networks:
     cmd_settings:
       chain_id: 1337
       mnemonic: flavor leopard uniform torch ticket child piece plate elite until slight chest
+      gas_limit: 200000000
 
 compiler:
   evm_version: istanbul

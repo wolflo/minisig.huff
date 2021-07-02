@@ -8,7 +8,9 @@
   "scripts": {
     "compile": "node compile.js",
     "test": "yarn compile && cd tests/ && brownie test",
-    "debug": "./tests/hevm/hevm-debug"
+    "test:debug": "yarn compile && cd tests/ && brownie test -s --interactive",
+    "debug": "./tests/hevm/hevm-debug",
+    "benchmark": "yarn compile && cd tests/ && brownie test tests/benchmark.py -s"
   },
   "devDependencies": {},
   "dependencies": {
