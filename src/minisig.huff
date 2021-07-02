@@ -219,20 +219,22 @@ template <throw_dst, stop_dst, rt_len>
 
     // loop through signers and check if signer in signers
     // j := signerIdx
-    dup5 swap1 //[ signer j ..]
+    // dup5 swap1 //[ signer j ..]
+    dup5 dup2 //[ signer j signer ...]
     check_next_signer_dst:
       // if j >= len(signers): revert
-      dup2 0x40 mload //[ len(signers) j signer j ]
-      gt iszero <throw_dst> jumpi //[ signer j ]
+      dup2 0x40 mload //[ len(signers) j signer j signer ]
+      gt iszero <throw_dst> jumpi //[ signer j signer ]
 
       // check if signer == signers[j]
-      dup2 0x20 mul 0x60 add mload // [ signers[j] signer j ]
-      eq is_match_dst jumpi // [ j ]
+      dup2 0x20 mul 0x60 add mload // [ signers[j] signer j signer ]
+      eq is_match_dst jumpi // [ j signer ]
 
       // if signer != signers[j]
         // inc j
         // jump to check_next_signer_dst
-      0x01 add //[ j+1 ]
+      0x01 add //[ j+1 signer ]
+      dup2     //[ signer j+1 signer ]
       check_next_signer_dst jump
 
 
@@ -240,8 +242,10 @@ template <throw_dst, stop_dst, rt_len>
         // inc i
         // signerIdx := j
         // jump to check_next_sig_dst
-      //[ j ecrec_ptr+32 sigIdx i signerIdx -- ecrec_ptr thresh sigs_ptr+32 digest ]
+      //[ j signer ecrec_ptr+32 sigIdx i signerIdx -- ecrec_ptr thresh sigs_ptr+32 digest ]
       is_match_dst:
+        swap1 pop
+        //[ j ecrec_ptr+32 sigIdx i signerIdx -- ecrec_ptr thresh sigs_ptr+32 digest ]
         0x01 add //[ j+1 ecrec_ptr+32 sigIdx i signerIdx -- ecrec_ptr thresh sigs_ptr+32 digest ]
         swap1 pop swap1 pop //[ j+1 i signerIdx -- ecrec_ptr thresh sigs_ptr+32 digest ]
         swap2 pop //[ i j+1 -- ecrec_ptr thresh sigs_ptr+32 digest ]
