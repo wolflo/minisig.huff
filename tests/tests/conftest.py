@@ -6,9 +6,7 @@ import utils.utils as utils
 
 web3 = brownie.web3
 
-minisig_huff_bytecode = ''
-with open('../out/minisig.bin', 'r') as f:
-    minisig_huff_bytecode = f.readline().rstrip()
+MINISIG_HUFF_BYTECODE = open('../out/minisig.bin', 'r').readline().rstrip()
 
 @pytest.fixture(scope="function", autouse=True)
 def isolate(fn_isolation):
@@ -45,7 +43,7 @@ def MinisigHuff(IMinisig, deployer):
     web3.eth.defaultAccount = deployer.address
     return web3.eth.contract(
         abi=IMinisig.abi,
-        bytecode=minisig_huff_bytecode
+        bytecode=MINISIG_HUFF_BYTECODE
     )
 
 @pytest.fixture(scope="module")

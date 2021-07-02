@@ -22,9 +22,8 @@ def derive_accts(mnemonic, n):
 
 def new_msig(deployer, threshold, signers):
     IMinisig = brownie.IMinisig
-    web3.eth.defaultAccount = deployer.address
     MinisigHuff = web3.eth.contract(
-        abi = IMinisig.abi,
+        abi=IMinisig.abi,
         bytecode=MINISIG_HUFF_BYTECODE
     )
     init_code = MinisigHuff.constructor(threshold, signers).data_in_transaction

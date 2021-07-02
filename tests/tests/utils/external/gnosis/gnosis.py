@@ -43,9 +43,9 @@ def new_safe(deployer, threshold, signers):
 
     return (proxy, tx.gas_used)
 
-def exec(safe, signers, action, opts={}):
-    nonce = safe.nonce()
-    digest = safe.getTransactionHash(
+def signAndExecute(inst, signers, action, opts={}):
+    nonce = inst.nonce()
+    digest = inst.getTransactionHash(
         action.target,
         action.value,
         action.data,
@@ -55,7 +55,7 @@ def exec(safe, signers, action, opts={}):
         nonce
     )
     sigs = utils.allSign(signers, digest)
-    return safe.execTransaction(
+    return inst.execTransaction(
         action.target,
         action.value,
         action.data,

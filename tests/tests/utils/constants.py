@@ -6,7 +6,7 @@ MNEMONIC = "trim amount saddle learn guitar estate body this harsh never mango s
 OTHER_MNEMONIC = "fancy equal chaos whale run room execute vivid oven rabbit tag actress";
 
 # deployment parameters
-THRESHOLD = 3
+THRESHOLD = 2
 NUM_SIGNERS = 3
 
 DOMAIN_SEPARATOR_TYPEHASH = "0x0a684fcd4736a0673611bfe1e61ceb93fb09bcd288bc72c1155ebe13280ffeca"
