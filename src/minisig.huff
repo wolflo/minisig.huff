@@ -219,7 +219,6 @@ template <throw_dst, stop_dst, rt_len>
 
     // loop through signers and check if signer in signers
     // j := signerIdx
-    // dup5 swap1 //[ signer j ..]
     dup5 dup2 //[ signer j signer ...]
     check_next_signer_dst:
       // if j >= len(signers): revert
@@ -341,6 +340,14 @@ template <pure_funcs_dst>
   pop // []
 }
 
+// [ 00 ] -> []
+template <throw_dst>
+#define macro DISPATCH_NO_GETTERS = takes(1) returns(0) {
+  calldataload 0xe0 shr // [ calldata[:4] ]
+  PUSH_EXEC_FN_SIG() eq iszero  // [ (calldata[:4] != execute_sig) calldata[:4] ]
+  <throw_dst> jumpi
+}
+
 
 // replaces DISPATCH_PURE_FNS for implementation with only nonce() getter
 // [ calldata[:4] 00 ] -> return
@@ -402,6 +409,7 @@ template <rt_len>
 #define macro RUNTIME = takes(0) returns(0) {
   0x00 dup1
   DISPATCH<pure_funcs_dst>()
+  // DISPATCH_NO_GETTERS<throw_dst>()
   EXEC<throw_dst, stop_dst, rt_len>()
 
   pure_funcs_dst:

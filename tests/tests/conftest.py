@@ -39,8 +39,7 @@ def anyone(accounts):
     return accounts[0]
 
 @pytest.fixture(scope="module")
-def MinisigHuff(IMinisig, deployer):
-    web3.eth.defaultAccount = deployer.address
+def MinisigHuff(IMinisig):
     return web3.eth.contract(
         abi=IMinisig.abi,
         bytecode=MINISIG_HUFF_BYTECODE
