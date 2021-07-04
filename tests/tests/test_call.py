@@ -55,35 +55,42 @@ def test_two_calls(msig, usrs):
     signAndExecute(msig, usrs, Action(CallType.CALL))
     assert msig.nonce() == 2
 
-def test_first_threshold_signers(mock, deployer, usrs, usr_ids):
+def test_repeat_signer(msig, usrs):
+    signers = usrs.copy()
+    signers.insert(1, signers[0])
+    action = Action(CallType.CALL)
+    with brownie.reverts():
+        signAndExecute(msig, signers, action)
+
+def test_first_threshold_signers(deployer, usrs, usr_ids):
     threshold = len(usrs) - 1
-    action = Action(CallType.CALL, mock.address, C.ZERO_ADDRESS, 3000, 0, C.EMPTY_BYTES)
+    action = Action(CallType.CALL)
     (msig, _) = utils.new_msig(deployer, threshold, usr_ids)
     signAndExecute(msig, usrs[:threshold], action)
     assert msig.nonce() == 1
 
-def test_last_threshold_signers(mock, deployer, usrs, usr_ids):
+def test_last_threshold_signers(deployer, usrs, usr_ids):
     threshold = len(usrs) - 1
-    action = Action(CallType.CALL, mock.address, C.ZERO_ADDRESS, 3000, 0, C.EMPTY_BYTES)
+    action = Action(CallType.CALL)
     (msig, _) = utils.new_msig(deployer, threshold, usr_ids)
     signAndExecute(msig, usrs[-threshold:], action)
     assert msig.nonce() == 1
 
-def test_non_sequential_signers(mock, deployer, usrs, usr_ids):
+def test_non_sequential_signers(deployer, usrs, usr_ids):
     threshold = len(usrs) - 1
-    action = Action(CallType.CALL, mock.address, C.ZERO_ADDRESS, 3000, 0, C.EMPTY_BYTES)
+    action = Action(CallType.CALL)
     signers = usrs.copy()
     signers.pop(threshold // 2)
     (msig, _) = utils.new_msig(deployer, threshold, usr_ids)
-    signAndExecute(msig, signers, action)
+    signAndExecute(msig, signers[:threshold], action)
     assert msig.nonce() == 1
 
-def test_with_source(msig, mock, deployer, anyone, usrs):
-    action = Action(CallType.CALL, mock.address, deployer.address, 3000, 0, C.EMPTY_BYTES)
+def test_with_source(msig, deployer, usrs):
+    action = Action(CallType.CALL, C.ZERO_ADDRESS, deployer.address)
     signAndExecute(msig, usrs, action, {'from': deployer})
 
-def test_fail_wrong_source(msig, mock, deployer, anyone, usrs):
-    action = Action(CallType.CALL, mock.address, deployer.address, 3000, 0, C.EMPTY_BYTES)
+def test_fail_wrong_source(msig, deployer, anyone, usrs):
+    action = Action(CallType.CALL, C.ZERO_ADDRESS, deployer.address)
     with brownie.reverts():
         signAndExecute(msig, usrs, action, {'from': anyone})
 
